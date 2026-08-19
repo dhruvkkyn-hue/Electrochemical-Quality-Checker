@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, Beaker, Check, ChevronRight, CircleAlert, Crosshair, Database, Gauge, Info, LoaderCircle, Play, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, Waves } from 'lucide-react';
+import { Activity, Beaker, Check, ChevronRight, CircleAlert, Crosshair, Database, Download, FileText, Gauge, GitCompare, Info, LoaderCircle, Play, Printer, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, Table2, Usb, Waves } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { fetch_reading, generateSyntheticReading } from '@/lib/sensor-api';
 
 type SampleState = 'Good' | 'Medium' | 'Bad';
 type Phase = 'idle' | 'running' | 'ready' | 'error';
@@ -41,26 +42,13 @@ const statusColor: Record<SampleState, string> = {
   Bad: 'hsl(4 67% 52%)',
 };
 
-function seededNoise(seed: number) {
-  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
-  return (value - Math.floor(value)) * 2 - 1;
-}
-
 function buildMeasurement(state: SampleState, noise: number, run: number): Measurement {
   const profile = {
-    Good: { amplitude: 1.0, center: 0.4, width: 0.055, drift: 0.012, symmetry: 0.96 },
-    Medium: { amplitude: 0.6, center: 0.42, width: 0.078, drift: 0.036, symmetry: 0.84 },
-    Bad: { amplitude: 0.16, center: 0.45, width: 0.12, drift: 0.079, symmetry: 0.62 },
+    Good: { amplitude: 1.0, width: 0.055, drift: 0.012, symmetry: 0.96 },
+    Medium: { amplitude: 0.6, width: 0.078, drift: 0.036, symmetry: 0.84 },
+    Bad: { amplitude: 0.16, width: 0.12, drift: 0.079, symmetry: 0.62 },
   }[state];
-  const points: Point[] = [];
-  for (let index = 0; index <= 100; index += 1) {
-    const potential = index * 0.008;
-    const peak = profile.amplitude * Math.exp(-Math.pow(potential - profile.center, 2) / (2 * Math.pow(profile.width, 2)));
-    const shoulder = profile.amplitude * 0.12 * Math.exp(-Math.pow(potential - 0.58, 2) / (2 * Math.pow(profile.width * 1.7, 2)));
-    const baseline = 0.08 + profile.drift * potential * 1.8;
-    const noiseSample = noise * (0.7 + Math.abs(Math.sin(index * 0.31))) * seededNoise(index + run * 17);
-    points.push({ potential, current: Math.max(0.03, baseline + peak + shoulder + noiseSample) });
-  }
+  const points: Point[] = generateSyntheticReading({ state, noise, run });
   const peakPoint = points.reduce((max, point) => point.current > max.current ? point : max, points[0]);
   const auc = points.reduce((total, point, index) => index === 0 ? total : total + ((points[index - 1].current + point.current) / 2) * (point.potential - points[index - 1].potential), 0);
   const quality = Math.max(0, Math.min(1, (profile.amplitude / 1.0) * (1 - noise * 5.5) * (1 - profile.drift * 2)));
@@ -101,21 +89,21 @@ function StatusBadge({ status }: { status: SampleState }) {
   );
 }
 
-function DpvChart({ measurement }: { measurement: Measurement }) {
+function DpvChart({ measurement, comparison }: { measurement: Measurement; comparison?: Measurement }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const chart = useMemo(() => {
     const width = 900;
     const height = 330;
     const pad = { left: 57, right: 24, top: 22, bottom: 43 };
     const minY = 0;
-    const maxY = 2.18;
+    const maxY = 1.3;
     const x = (potential: number) => pad.left + (potential / 0.8) * (width - pad.left - pad.right);
     const y = (current: number) => height - pad.bottom - ((current - minY) / (maxY - minY)) * (height - pad.top - pad.bottom);
-    const path = measurement.points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(point.potential).toFixed(2)} ${y(point.current).toFixed(2)}`).join(' ');
+    const makePath = (points: Point[]) => points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${x(point.potential).toFixed(2)} ${y(point.current).toFixed(2)}`).join(' ');
     const peakX = x(measurement.peakPotential);
     const peakY = y(measurement.peakCurrent);
-    return { width, height, pad, x, y, path, peakX, peakY };
-  }, [measurement]);
+    return { width, height, pad, x, y, path: makePath(measurement.points), comparisonPath: comparison ? makePath(comparison.points) : null, peakX, peakY, comparisonPeakX: comparison ? x(comparison.peakPotential) : null, comparisonPeakY: comparison ? y(comparison.peakCurrent) : null };
+  }, [measurement, comparison]);
   const activePoint = hoverIndex === null ? null : measurement.points[hoverIndex];
   const activeX = activePoint ? chart.x(activePoint.potential) : 0;
   const activeY = activePoint ? chart.y(activePoint.current) : 0;
@@ -140,7 +128,7 @@ function DpvChart({ measurement }: { measurement: Measurement }) {
               <stop offset="100%" stopColor="hsl(183 72% 31% / 0)" />
             </linearGradient>
           </defs>
-          {[0, 0.55, 1.1, 1.65, 2.2].map((tick) => (
+          {[0, 0.325, 0.65, 0.975, 1.3].map((tick) => (
             <g key={tick}>
               <line x1={chart.pad.left} x2={chart.width - chart.pad.right} y1={chart.y(tick)} y2={chart.y(tick)} stroke="hsl(36 21% 80% / .75)" strokeWidth="1" />
               <text x={chart.pad.left - 12} y={chart.y(tick) + 4} textAnchor="end" fill="hsl(213 14% 45%)" fontSize="11" fontFamily="Space Mono">{tick.toFixed(1)}</text>
@@ -154,8 +142,10 @@ function DpvChart({ measurement }: { measurement: Measurement }) {
           ))}
            <path d={`${chart.path} L ${chart.x(.8)} ${chart.height - chart.pad.bottom} L ${chart.x(0)} ${chart.height - chart.pad.bottom} Z`} fill="url(#signal-fill)" />
           <path d={chart.path} fill="none" stroke="hsl(183 72% 31%)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="chart-line" />
+          {chart.comparisonPath && <path d={chart.comparisonPath} fill="none" stroke="hsl(4 67% 52%)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="chart-line comparison-line" />}
           <line x1={chart.peakX} x2={chart.peakX} y1={chart.pad.top} y2={chart.height - chart.pad.bottom} stroke="hsl(23 74% 56%)" strokeWidth="1.5" strokeDasharray="5 5" />
           <circle cx={chart.peakX} cy={chart.peakY} r="5" fill="hsl(42 38% 98%)" stroke="hsl(23 74% 56%)" strokeWidth="2.5" />
+          {chart.comparisonPeakX !== null && chart.comparisonPeakY !== null && <><line x1={chart.comparisonPeakX} x2={chart.comparisonPeakX} y1={chart.pad.top} y2={chart.height - chart.pad.bottom} stroke="hsl(4 67% 52%)" strokeWidth="1.5" strokeDasharray="3 5" /><circle cx={chart.comparisonPeakX} cy={chart.comparisonPeakY} r="5" fill="hsl(42 38% 98%)" stroke="hsl(4 67% 52%)" strokeWidth="2.5" /></>}
           {activePoint && (
             <g className="chart-tooltip">
               <line x1={activeX} x2={activeX} y1={chart.pad.top} y2={chart.height - chart.pad.bottom} stroke="hsl(213 31% 17% / .28)" strokeDasharray="3 4" />
