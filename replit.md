@@ -22,12 +22,14 @@ An interactive proof-of-concept dashboard for generating synthetic DPV signals, 
 
 ## Where things live
 
-- `artifacts/electrochemical-quality-checker/src/App.tsx` — signal generation, feature extraction, classifier scoring, and dashboard UI
+- `artifacts/electrochemical-quality-checker/src/App.tsx` — feature extraction, classifier scoring, comparison, reporting, and dashboard UI
+- `artifacts/electrochemical-quality-checker/src/lib/sensor-api.ts` — stable `fetch_reading()` seam for synthetic or future serial/Bluetooth hardware data
 - `artifacts/electrochemical-quality-checker/src/index.css` — instrument-console theme and responsive layout
 
 ## Architecture decisions
 
 - Synthetic measurements run locally in the browser so the raw signal and derived features remain inspectable without external services.
+- `SensorAPI` keeps future potentiostat I/O behind a normalized `fetch_reading()` contract so hardware can be added without changing the dashboard.
 - DPV traces use 101 points across 0.00–0.80 V, with seeded noise so repeated runs are varied but reproducible.
 - The classifier is represented as transparent feature-based scoring for this proof of concept rather than a hidden model dependency.
 

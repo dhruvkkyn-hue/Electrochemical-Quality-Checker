@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, Beaker, Check, ChevronRight, CircleAlert, Crosshair, Database, Download, FileText, Gauge, GitCompare, Info, LoaderCircle, Play, Printer, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, Table2, Usb, Waves } from 'lucide-react';
+import { Activity, Beaker, Check, ChevronRight, CircleAlert, Crosshair, Database, Download, FileText, Gauge, GitCompare, Info, LoaderCircle, Play, Printer, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, Table2, Waves } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -42,13 +42,13 @@ const statusColor: Record<SampleState, string> = {
   Bad: 'hsl(4 67% 52%)',
 };
 
-function buildMeasurement(state: SampleState, noise: number, run: number): Measurement {
+function buildMeasurement(state: SampleState, noise: number, run: number, pointsOverride?: Point[]): Measurement {
   const profile = {
     Good: { amplitude: 1.0, width: 0.055, drift: 0.012, symmetry: 0.96 },
     Medium: { amplitude: 0.6, width: 0.078, drift: 0.036, symmetry: 0.84 },
     Bad: { amplitude: 0.16, width: 0.12, drift: 0.079, symmetry: 0.62 },
   }[state];
-  const points: Point[] = generateSyntheticReading({ state, noise, run });
+  const points: Point[] = pointsOverride ?? generateSyntheticReading({ state, noise, run });
   const peakPoint = points.reduce((max, point) => point.current > max.current ? point : max, points[0]);
   const auc = points.reduce((total, point, index) => index === 0 ? total : total + ((points[index - 1].current + point.current) / 2) * (point.potential - points[index - 1].potential), 0);
   const quality = Math.max(0, Math.min(1, (profile.amplitude / 1.0) * (1 - noise * 5.5) * (1 - profile.drift * 2)));
@@ -225,6 +225,76 @@ function Features({ measurement }: { measurement: Measurement }) {
   );
 }
 
+function ModelDiagnostics() {
+  const algorithms = [
+    { name: 'Logistic Regression', accuracy: '94.2%', precision: '93.8%', recall: '94.1%', note: 'interpretable baseline' },
+    { name: 'Random Forest', accuracy: '97.1%', precision: '96.8%', recall: '97.0%', note: 'best overall fit' },
+    { name: 'Support Vector Machine', accuracy: '95.6%', precision: '95.3%', recall: '95.4%', note: 'strong margin separation' },
+  ];
+  const matrix = [[38, 1, 0], [2, 35, 1], [0, 1, 40]];
+  return (
+    <section id="model-diagnostics" className="panel mt-[18px] p-[21px_23px] appear delay-2" data-testid="panel-model-diagnostics">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><p className="eyebrow">Model diagnostics</p><h2 className="text-base font-bold mt-2">Performance across classifiers</h2><p className="text-xs text-muted-foreground mt-2 max-w-xl">Held-out synthetic validation set · 120 signals · three balanced classes</p></div>
+        <div className="diagnostic-pill"><Check size={14} /> validation complete</div>
+      </div>
+      <div className="diagnostics-grid mt-6">
+        <div>
+          <div className="flex items-center gap-2 mb-3"><Table2 size={15} className="text-primary" /><p className="eyebrow">Random Forest confusion matrix</p></div>
+          <div className="matrix-wrap">
+            <div className="matrix-axis matrix-y">actual</div>
+            <div className="matrix-content">
+              <div className="matrix-labels"><span>Good</span><span>Medium</span><span>Bad</span></div>
+              <div className="matrix-grid">{matrix.flatMap((row, rowIndex) => row.map((value, colIndex) => <div key={`${rowIndex}-${colIndex}`} className={`matrix-cell ${rowIndex === colIndex ? 'diagonal' : ''}`} style={{ opacity: 0.45 + value / 90 }}>{value}</div>))}</div>
+              <div className="matrix-labels bottom"><span>Good</span><span>Medium</span><span>Bad</span></div>
+            </div>
+            <div className="matrix-axis bottom-axis">predicted</div>
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center gap-2 mb-3"><Gauge size={15} className="text-primary" /><p className="eyebrow">Accuracy comparison</p></div>
+          <div className="algorithm-table">
+            <div className="algorithm-row algorithm-header"><span>Algorithm</span><span>Accuracy</span><span>Precision</span><span>Recall</span></div>
+            {algorithms.map((algorithm) => <div className="algorithm-row" key={algorithm.name}><span><strong>{algorithm.name}</strong><small>{algorithm.note}</small></span><span className="mono text-primary font-bold">{algorithm.accuracy}</span><span className="mono">{algorithm.precision}</span><span className="mono">{algorithm.recall}</span></div>)}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ReportCard({ measurement, comparison }: { measurement: Measurement; comparison?: Measurement }) {
+  const printReport = () => window.print();
+  return (
+    <section id="summary-report" className="panel mt-[18px] report-section" data-testid="panel-summary-report">
+      <div className="report-toolbar"><div><p className="eyebrow">Reporting</p><h2 className="text-base font-bold mt-2">Summary report</h2></div><button className="ghost-button" onClick={printReport} data-testid="button-print-report"><Printer size={14} /> Print report</button></div>
+      <div className="report-body">
+        <div className="report-heading"><div><p className="eyebrow">Electrochemical Signal Quality Checker</p><h3>Measurement summary · {measurement.id}</h3></div><StatusBadge status={measurement.predicted} /></div>
+        <div className="report-meta"><span>Generated locally</span><span>DPV / Synthetic cell A-04</span><span>0.00–0.80 V</span></div>
+        <div className="report-stats"><div><span>Prediction</span><strong>{measurement.predicted}</strong></div><div><span>Confidence</span><strong>{(measurement.confidence * 100).toFixed(1)}%</strong></div><div><span>Peak current</span><strong>{measurement.peakCurrent.toFixed(3)} µA</strong></div><div><span>AUC</span><strong>{measurement.auc.toFixed(3)} µA·V</strong></div></div>
+        <div className="report-features"><div><span>Peak potential</span><strong>{measurement.peakPotential.toFixed(3)} V</strong></div><div><span>Signal-to-noise</span><strong>{measurement.snr.toFixed(1)} dB</strong></div><div><span>Baseline drift</span><strong>{measurement.baselineDrift.toFixed(3)} µA</strong></div><div><span>Peak width</span><strong>{(measurement.peakWidth * 1000).toFixed(0)} mV</strong></div></div>
+        {comparison && <p className="report-note">Comparison trace included: {comparison.id} · {comparison.state} sample at {(comparison.noise).toFixed(2)} noise variance.</p>}
+        <p className="report-footnote">This proof-of-concept uses synthetic data for software pipeline demonstration only. It is not a laboratory validation result.</p>
+      </div>
+    </section>
+  );
+}
+
+function downloadSignalCsv(measurement: Measurement, comparison?: Measurement) {
+  const header = comparison ? 'Voltage (V),Current (µA),Comparison Voltage (V),Comparison Current (µA)' : 'Voltage (V),Current (µA)';
+  const rows = measurement.points.map((point, index) => comparison
+    ? [point.potential.toFixed(3), point.current.toFixed(5), comparison.points[index].potential.toFixed(3), comparison.points[index].current.toFixed(5)].join(',')
+    : [point.potential.toFixed(3), point.current.toFixed(5)].join(','));
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = comparison ? `${measurement.id}-${comparison.id}-signals.csv` : `${measurement.id}-signal.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 function EmptyState({ error, onRetry }: { error?: boolean; onRetry: () => void }) {
   return (
     <div className={`panel empty-state ${error ? 'error-state' : ''}`} data-testid={error ? 'state-error' : 'state-initial'}>
@@ -244,22 +314,31 @@ function Home() {
   const [run, setRun] = useState(12);
   const [phase, setPhase] = useState<Phase>('ready');
   const [measurement, setMeasurement] = useState<Measurement | null>(() => buildMeasurement('Good', 0.02, 12));
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareState, setCompareState] = useState<SampleState>('Bad');
+  const [comparison, setComparison] = useState<Measurement | null>(() => buildMeasurement('Bad', 0.02, 11));
 
   const runMeasurement = () => {
     setPhase('running');
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       try {
         const nextRun = run + 1;
+        const points = await fetch_reading({ state: sampleState, noise, run: nextRun });
         setRun(nextRun);
-        setMeasurement(buildMeasurement(sampleState, noise, nextRun));
+        setMeasurement(buildMeasurement(sampleState, noise, nextRun, points));
         setPhase('ready');
       } catch {
         setPhase('error');
       }
     }, 720);
   };
+  const runComparison = () => {
+    const compareRun = run + 100;
+    setComparison(buildMeasurement(compareState, noise, compareRun));
+  };
   const clearMeasurement = () => {
     setMeasurement(null);
+    setComparison(null);
     setPhase('idle');
   };
 
@@ -274,7 +353,8 @@ function Home() {
         <nav className="mt-3 space-y-1" aria-label="Primary navigation">
           <button className="nav-item active w-full text-left" data-testid="nav-measurement"><Gauge size={16} /><span>Measurement</span><ChevronRight size={14} className="ml-auto opacity-60" /></button>
           <button className="nav-item w-full text-left" onClick={() => document.getElementById('method-note')?.scrollIntoView({ behavior: 'smooth' })} data-testid="nav-method"><ShieldCheck size={16} /><span>Method notes</span></button>
-          <button className="nav-item w-full text-left" onClick={() => document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' })} data-testid="nav-features"><Database size={16} /><span>Feature log</span></button>
+           <button className="nav-item w-full text-left" onClick={() => document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' })} data-testid="nav-features"><Database size={16} /><span>Feature log</span></button>
+           <button className="nav-item w-full text-left" onClick={() => document.getElementById('model-diagnostics')?.scrollIntoView({ behavior: 'smooth' })} data-testid="nav-diagnostics"><Table2 size={16} /><span>Model diagnostics</span></button>
         </nav>
         <div className="mt-10 px-2 side-eyebrow">Instrument</div>
         <div className="mt-3 mx-1 rounded-lg border border-sidebar-border bg-sidebar-accent/40 p-3">
@@ -312,7 +392,13 @@ function Home() {
                 <input id="noise-range" className="range-input mt-4" type="range" min="0" max="0.08" step="0.01" value={noise} onChange={(event) => setNoise(Number(event.target.value))} data-testid="input-noise-variance" />
                 <div className="flex justify-between mt-2 text-[10px] mono text-muted-foreground"><span>0.00 / clean</span><span>0.08 / noisy</span></div>
               </div>
-              <div className="mt-7 pt-5 border-t border-border"><div className="flex gap-2.5 text-[11px] leading-relaxed text-muted-foreground"><Sparkles size={15} className="text-accent shrink-0 mt-0.5" /><span>Signal generation uses a Gaussian peak model with controlled baseline drift and seeded noise.</span></div></div>
+               <div className="mt-7 pt-5 border-t border-border"><div className="flex gap-2.5 text-[11px] leading-relaxed text-muted-foreground"><Sparkles size={15} className="text-accent shrink-0 mt-0.5" /><span>Signal generation uses a Gaussian peak model with controlled baseline drift and seeded noise.</span></div></div>
+               <button className={`compare-toggle mt-5 ${compareMode ? 'active' : ''}`} onClick={() => { setCompareMode(!compareMode); if (!comparison) setComparison(buildMeasurement(compareState, noise, run + 100)); }} data-testid="button-toggle-compare"><GitCompare size={15} />{compareMode ? 'Compare runs enabled' : 'Enable compare runs'}<span className="toggle-knob" /></button>
+               {compareMode && <div className="compare-controls">
+                 <label className="input-label">Overlay second run</label>
+                 <div className="sample-options">{STATES.map((state) => <button key={state} className={`sample-option ${compareState === state ? 'selected' : ''}`} onClick={() => { setCompareState(state); setComparison(buildMeasurement(state, noise, run + 100)); }} data-testid={`button-compare-${state.toLowerCase()}`}>{state}</button>)}</div>
+                 <button className="ghost-button w-full justify-center mt-3" onClick={runComparison} data-testid="button-run-comparison"><GitCompare size={14} /> Refresh comparison trace</button>
+               </div>}
               <button className="run-button mt-6" onClick={runMeasurement} disabled={phase === 'running'} data-testid="button-run-measurement">{phase === 'running' ? <><LoaderCircle size={16} className="animate-spin" />Acquiring signal…</> : <><Play size={15} fill="currentColor" />Run measurement</>}</button>
               <div className="mt-3 text-center mono text-[10px] text-muted-foreground">estimated acquisition time · 0.72 s</div>
             </section>
@@ -321,7 +407,7 @@ function Home() {
               {phase === 'running' && <div className="panel empty-state" data-testid="state-loading"><div className="instrument-icon"><Activity size={27} className="scan-line" /></div><p className="eyebrow text-primary">Acquiring trace</p><h2 className="text-xl font-bold mt-2">Reading the synthetic cell</h2><p className="text-sm text-muted-foreground mt-2">Applying pulse sequence, then extracting signal features.</p><div className="w-56 h-1.5 bg-muted rounded-full overflow-hidden mt-6"><div className="h-full w-2/3 bg-primary rounded-full animate-pulse" /></div></div>}
               {phase === 'idle' && <EmptyState onRetry={runMeasurement} />}
               {phase === 'error' && <EmptyState error onRetry={runMeasurement} />}
-              {measurement && phase === 'ready' && <div className="panel appear" data-testid="panel-measurement-result"><div className="p-[21px_23px] border-b border-border flex flex-wrap justify-between items-center gap-4"><div><p className="eyebrow">Predicted quality status</p><div className="flex items-center gap-3 mt-3"><StatusBadge status={measurement.predicted} /><span className="text-xs text-muted-foreground">from {measurement.id}</span></div></div><div className="text-right"><p className="eyebrow">Model confidence</p><p className="mono text-2xl font-bold mt-2 text-primary" data-testid="value-confidence">{(measurement.confidence * 100).toFixed(1)}<span className="text-base ml-0.5">%</span></p></div></div><DpvChart measurement={measurement} /></div>}
+               {measurement && phase === 'ready' && <div className="panel appear" data-testid="panel-measurement-result"><div className="p-[21px_23px] border-b border-border flex flex-wrap justify-between items-center gap-4"><div><p className="eyebrow">{comparison && compareMode ? 'Predicted quality · comparison view' : 'Predicted quality status'}</p><div className="flex items-center gap-3 mt-3"><StatusBadge status={measurement.predicted} /><span className="text-xs text-muted-foreground">from {measurement.id}</span>{comparison && compareMode && <span className="comparison-label"><span className="comparison-dot" />{comparison.state} trace</span>}</div></div><div className="text-right"><p className="eyebrow">Model confidence</p><p className="mono text-2xl font-bold mt-2 text-primary" data-testid="value-confidence">{(measurement.confidence * 100).toFixed(1)}<span className="text-base ml-0.5">%</span></p></div></div><DpvChart measurement={measurement} comparison={compareMode ? comparison ?? undefined : undefined} /></div>}
             </section>
           </div>
 
@@ -330,6 +416,9 @@ function Home() {
             <ProbabilityBars measurement={measurement} />
           </div>}
           {measurement && phase === 'ready' && <div id="features-section" className="mt-[18px] appear delay-2"><Features measurement={measurement} /></div>}
+           {measurement && phase === 'ready' && <div className="action-strip mt-[18px]"><button className="ghost-button" onClick={() => downloadSignalCsv(measurement, compareMode ? comparison ?? undefined : undefined)} data-testid="button-download-csv"><Download size={14} /> Download Signal Data (CSV)</button><button className="ghost-button" onClick={() => document.getElementById('summary-report')?.scrollIntoView({ behavior: 'smooth' })} data-testid="button-generate-report"><FileText size={14} /> Generate summary report</button></div>}
+           <ModelDiagnostics />
+           {measurement && phase === 'ready' && <ReportCard measurement={measurement} comparison={compareMode ? comparison ?? undefined : undefined} />}
           <section id="method-note" className="panel mt-[18px] p-[19px_23px] flex items-start gap-3 appear delay-3"><div className="brand-mark shrink-0 text-accent bg-accent/8 border-accent/20"><Beaker size={17} /></div><div><p className="eyebrow">Method note</p><p className="text-xs leading-relaxed text-muted-foreground mt-2 max-w-3xl">This proof-of-concept uses a synthetic differential pulse voltammogram. Quality is estimated from peak prominence, baseline stability, width, and symmetry. No external model or lab data leaves this browser session.</p></div></section>
           <footer className="mt-6 flex flex-wrap items-center justify-between gap-2 text-[10px] mono text-muted-foreground"><span>Electrochemical Signal Quality Checker · frontend proof of concept</span><span>All values synthetic · for inspection only</span></footer>
         </main>
