@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Electrochemical Quality Checker"
+description = "A proof-of-concept dashboard that generates synthetic DPV electrochemical signals, extracts interpretable features, and predicts signal quality with a trained classifier."
+version = "1.0.0"
+id = "artifacts/electrochemical-quality-checker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21816
+
+[services.development]
+run = "pnpm --filter @workspace/electrochemical-quality-checker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/electrochemical-quality-checker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/electrochemical-quality-checker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21816"
+BASE_PATH = "/"

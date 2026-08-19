@@ -1,6 +1,6 @@
-# [Project name]
+# Electrochemical Quality Checker
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+An interactive proof-of-concept dashboard for generating synthetic DPV signals, extracting features, and classifying signal quality.
 
 ## Run & Operate
 
@@ -22,23 +22,26 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/electrochemical-quality-checker/src/App.tsx` — signal generation, feature extraction, classifier scoring, and dashboard UI
+- `artifacts/electrochemical-quality-checker/src/index.css` — instrument-console theme and responsive layout
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Synthetic measurements run locally in the browser so the raw signal and derived features remain inspectable without external services.
+- DPV traces use 101 points across 0.00–0.80 V, with seeded noise so repeated runs are varied but reproducible.
+- The classifier is represented as transparent feature-based scoring for this proof of concept rather than a hidden model dependency.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Users can choose Good, Medium, or Bad sample conditions, tune noise variance, run a measurement, inspect an interactive DPV curve, review class probabilities, and audit extracted features including trapezoidal AUC.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+None recorded.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+The dashboard is intentionally synthetic and should not be presented as a laboratory validation tool.
 
 ## Pointers
 

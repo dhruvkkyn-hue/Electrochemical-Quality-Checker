@@ -1,0 +1,46 @@
+Build a full-stack, single-page web dashboard that serves as a Proof-of-Concept Quality Checker using synthetic signal data and machine learning.
+
+### Core App Purpose
+The application demonstrates an end-to-end software pipeline: generating synthetic Differential Pulse Voltammetry (DPV) electrochemistry curves, extracting numeric features, running a machine learning classifier, and displaying the quality prediction to the user.
+
+### Tech Stack Specifications
+- Frontend: Modern, clean interactive UI (React/Tailwind or Streamlit/Plotly depending on framework).
+- Data Engine & Math: NumPy / SciPy equivalents for synthetic signal generation.
+- Machine Learning: Scikit-learn (or client-side JS classifier like RandomForest/LogisticRegression) for classification.
+- Visualization: Plotly or Recharts for smooth, interactive line and bar charts.
+
+### Technical Implementation Steps
+
+1. Synthetic Signal Generator Engine:
+   - Create a mathematical generator function for synthetic DPV curves (Voltage array from 0.0V to 0.8V, 100 data points).
+   - Base signal equation: Exponential decay baseline + Gaussian oxidation peak + Gaussian noise.
+   - Support three target quality states:
+     * "Good": Peak amplitude ~1.0, peak voltage ~0.40V, low noise.
+     * "Medium": Peak amplitude ~0.6, peak voltage shift ~0.42V, moderate noise.
+     * "Bad": Flattened peak amplitude <=0.2, peak voltage shift ~0.45V, higher noise variance.
+   - Include a user-adjustable slider for noise variance (0.00 to 0.08).
+
+2. Feature Extraction & Classifier:
+   - Extract 4 key scalar features from generated curve data:
+     * Peak Height (Max Current)
+     * Peak Voltage (Location of Max Current)
+     * Area Under Curve (AUC via trapezoidal integration)
+     * Signal-to-Noise Ratio (SNR)
+   - Train a classifier (Random Forest or Logistic Regression) on a pre-generated dataset of synthetic signals across all three classes.
+
+3. UI & Dashboard Layout:
+   - Header: App Title ("Electrochemical Signal Quality Checker") & Subtitle ("Software Proof-of-Concept").
+   - Control Panel (Sidebar or Top Bar):
+     * Dropdown/Select: "Simulate Sample State" (Good, Medium, Bad).
+     * Slider: "Noise Variance".
+     * Action Button: "Run Measurement / Generate Signal".
+   - Main Results Metrics (Top Cards):
+     * Predicted Status Badge: Color-coded (Green = Good, Yellow = Medium, Red = Bad).
+     * Model Confidence Percentage (e.g., 94.2%).
+     * Peak Current Amplitude value.
+   - Visualization Section:
+     * Interactive Line Chart: Generated DPV Signal (Applied Potential vs Current Output).
+     * Bar Chart: Class Probabilities for Good, Medium, and Bad states.
+   - Feature Table/JSON Inspector: Show raw extracted features for transparency.
+
+Provide a fully functional, self-contained, and bug-free implementation with clean styling and layout.
