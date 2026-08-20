@@ -95,10 +95,16 @@ def build_measurement(state: SampleState, noise: float, run: int,
     profile = PROFILES[state]
     signal = points or generate_synthetic_reading(state, noise, run)
     peak_point = max(signal, key=lambda point: point.current)
-    auc = float(np.trapezoid(
-        [point.current for point in signal],
-        [point.potential for point in signal],
-    ))
+    if hasattr(np, "trapezoid"):
+        integrator = np.trapezoid
+    else:
+        integrator = np.trapz
+    auc = float(
+        integrator(
+            [point.current for point in signal],
+            [point.potential for point in signal],
+        )
+    )
     quality = max(
         0.0,
         min(1.0, profile["amplitude"] * (1 - noise * 5.5) * (1 - profile["drift"] * 2)),

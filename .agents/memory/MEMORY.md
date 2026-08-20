@@ -1,0 +1,1 @@
+- [Streamlit conversion](streamlit-conversion.md) — root Python entry point and bounded dependencies support Community Cloud deployment.
